@@ -1,0 +1,16 @@
+version: 1
+project: example-app
+build:
+  context: .
+  dockerfile: Dockerfile
+service:
+  container_port: 3000
+health:
+  path: /health
+  expected_status: 200
+resources:
+  cpu: 1
+  memory: 1024MB
+preview:
+  ttl: 48h
+  authentication: required

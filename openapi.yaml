@@ -1,0 +1,24 @@
+openapi: 3.1.0
+info: {title: PreviewDock API, version: 1.0.0}
+paths:
+  /healthz:
+    get: {responses: {'200': {description: Service healthy}}}
+  /api/v1/deployments:
+    get:
+      responses: {'200': {description: Deployment list, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Deployment'}}}}}
+  /api/v1/webhooks/github:
+    post:
+      parameters: [{name: X-Hub-Signature-256, in: header, required: true, schema: {type: string}}]
+      responses: {'202': {description: Event accepted}, '401': {description: Invalid signature}}
+components:
+  schemas:
+    Deployment:
+      type: object
+      required: [id, repository, pullRequest, commitSha, state, createdAt]
+      properties:
+        id: {type: string}
+        repository: {type: string}
+        pullRequest: {type: integer}
+        commitSha: {type: string}
+        state: {type: string}
+        createdAt: {type: string, format: date-time}

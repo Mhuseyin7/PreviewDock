@@ -1,0 +1,10 @@
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE TYPE deployment_state AS ENUM ('QUEUED','VALIDATING','BUILDING','PROVISIONING','STARTING','VERIFYING','READY','UPDATING','FAILED','STOPPING','DELETING','DELETED','EXPIRED');
+CREATE TABLE organizations (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE users (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), email text UNIQUE NOT NULL, password_hash text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE memberships (organization_id uuid REFERENCES organizations(id) ON DELETE CASCADE, user_id uuid REFERENCES users(id) ON DELETE CASCADE, role text NOT NULL CHECK(role IN ('OWNER','ADMIN','DEVELOPER','VIEWER')), PRIMARY KEY(organization_id,user_id));
+CREATE TABLE repositories (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, github_installation_id bigint NOT NULL, github_repository_id bigint NOT NULL, full_name text NOT NULL, UNIQUE(organization_id,github_repository_id));
+CREATE TABLE deployments (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), repository_id uuid NOT NULL REFERENCES repositories(id) ON DELETE CASCADE, pull_request_number integer NOT NULL CHECK(pull_request_number>0), commit_sha text NOT NULL, state deployment_state NOT NULL, preview_url text, created_at timestamptz NOT NULL DEFAULT now(), expires_at timestamptz, UNIQUE(repository_id,pull_request_number,commit_sha));
+CREATE INDEX deployments_repository_state_idx ON deployments(repository_id,state);
+CREATE TABLE webhook_deliveries (delivery_id uuid PRIMARY KEY, received_at timestamptz NOT NULL DEFAULT now(), event_type text NOT NULL, payload_sha256 text NOT NULL);
+CREATE TABLE audit_logs (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid REFERENCES organizations(id) ON DELETE CASCADE, actor_id uuid REFERENCES users(id) ON DELETE SET NULL, action text NOT NULL, resource_type text NOT NULL, resource_id uuid, created_at timestamptz NOT NULL DEFAULT now());
