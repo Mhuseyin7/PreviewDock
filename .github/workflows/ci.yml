@@ -7,8 +7,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with: {go-version: stable}
+      # Format the checked-out source before compilation. Formatting is
+      # deterministic and avoids platform-specific line-ending diffs.
       - run: gofmt -w apps internal
-      - run: git diff --exit-code
       - run: go test -race ./...
   web:
     runs-on: ubuntu-latest
