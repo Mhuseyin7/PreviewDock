@@ -36,7 +36,7 @@ func main() {
   if ev.Action!="opened" && ev.Action!="synchronize" && ev.Action!="reopened" && ev.Action!="closed" { jsonResponse(w,202,map[string]string{"status":"ignored"}); return }
   if ev.Action=="closed" { jsonResponse(w,202,map[string]string{"status":"cleanup_queued"}); return }
   if ev.Fork { jsonResponse(w,202,map[string]string{"status":"approval_required"}); return }
-  d:=deployments.New(ev.Repository,ev.Number,ev.SHA); store.create(d)
+  d:=deployments.New(ev.Repository.FullName,ev.Number,ev.PullRequest.Head.SHA); store.create(d)
   logger.Info("deployment queued", "deployment_id",d.ID,"repository",d.Repository,"pr",d.PullRequest)
   jsonResponse(w,202,d)
  })
