@@ -17,6 +17,7 @@ import (
 )
 
 type deploymentStore struct { sync.Mutex; items map[string]deployments.Deployment }
+type deliveryStore struct { sync.Mutex; seen map[string]time.Time }
 func (s *deploymentStore) create(d deployments.Deployment) { s.Lock(); defer s.Unlock(); s.items[d.ID] = d }
 func (s *deploymentStore) list() []deployments.Deployment { s.Lock(); defer s.Unlock(); out:=make([]deployments.Deployment,0,len(s.items)); for _, d:=range s.items { out=append(out,d) }; return out }
 
@@ -24,13 +25,16 @@ func main() {
  logger:=slog.New(slog.NewJSONHandler(os.Stdout,nil)); secret:=os.Getenv("GITHUB_WEBHOOK_SECRET")
  if secret=="" { logger.Warn("GITHUB_WEBHOOK_SECRET is unset; webhook endpoint rejects all requests") }
  store:=&deploymentStore{items:map[string]deployments.Deployment{}}
+ deliveries:=&deliveryStore{seen:map[string]time.Time{}}
  mux:=http.NewServeMux()
  mux.HandleFunc("GET /healthz", func(w http.ResponseWriter,r *http.Request){ jsonResponse(w,200,map[string]string{"status":"ok"}) })
  mux.HandleFunc("GET /readyz", func(w http.ResponseWriter,r *http.Request){ jsonResponse(w,200,map[string]string{"status":"ready"}) })
  mux.HandleFunc("GET /api/v1/deployments", func(w http.ResponseWriter,r *http.Request){ jsonResponse(w,200,store.list()) })
  mux.HandleFunc("POST /api/v1/webhooks/github", func(w http.ResponseWriter,r *http.Request){
   defer r.Body.Close(); body,err:=github.ReadPayload(r.Body,1<<20); if err!=nil { apiError(w,400,"invalid_payload",err.Error()); return }
+  deliveryID:=r.Header.Get("X-GitHub-Delivery"); if deliveryID=="" { apiError(w,400,"missing_delivery_id","X-GitHub-Delivery is required"); return }
   if secret=="" || !github.VerifySignature(secret,r.Header.Get("X-Hub-Signature-256"),body) { apiError(w,401,"invalid_signature","webhook signature verification failed"); return }
+  deliveries.Lock(); _,duplicate:=deliveries.seen[deliveryID]; if !duplicate { deliveries.seen[deliveryID]=time.Now().UTC(); if len(deliveries.seen)>10000 { var oldest string; var oldestAt time.Time; for id,at:=range deliveries.seen { if oldest==""||at.Before(oldestAt) { oldest,oldestAt=id,at } }; delete(deliveries.seen,oldest) } }; deliveries.Unlock(); if duplicate { jsonResponse(w,202,map[string]string{"status":"duplicate"}); return }
   if r.Header.Get("X-GitHub-Event")!="pull_request" { jsonResponse(w,202,map[string]string{"status":"ignored"}); return }
   ev,err:=github.ParsePullRequest(body); if err!=nil { apiError(w,400,"invalid_payload",err.Error()); return }
   if ev.Action!="opened" && ev.Action!="synchronize" && ev.Action!="reopened" && ev.Action!="closed" { jsonResponse(w,202,map[string]string{"status":"ignored"}); return }
