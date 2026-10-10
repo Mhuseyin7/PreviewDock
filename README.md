@@ -39,6 +39,7 @@ docker compose up --build
 - API health: `http://localhost:8080/healthz`
 
 `GITHUB_WEBHOOK_SECRET` boşsa webhook endpoint'i fail-closed çalışır ve hiçbir isteği kabul etmez.
+İsterseniz `GITHUB_ALLOWED_REPOSITORIES` ile `owner/repository` formatında comma-separated bir allowlist tanımlayabilirsiniz; allowlist tanımlandığında diğer repository event'leri reddedilir.
 
 ## GitHub App setup
 

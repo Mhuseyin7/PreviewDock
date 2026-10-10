@@ -9,6 +9,7 @@ import (
  "log/slog"
  "net/http"
  "os"
+	"strings"
  "sync"
  "time"
 
@@ -37,6 +38,7 @@ func main() {
   deliveries.Lock(); _,duplicate:=deliveries.seen[deliveryID]; if !duplicate { deliveries.seen[deliveryID]=time.Now().UTC(); if len(deliveries.seen)>10000 { var oldest string; var oldestAt time.Time; for id,at:=range deliveries.seen { if oldest==""||at.Before(oldestAt) { oldest,oldestAt=id,at } }; delete(deliveries.seen,oldest) } }; deliveries.Unlock(); if duplicate { jsonResponse(w,202,map[string]string{"status":"duplicate"}); return }
   if r.Header.Get("X-GitHub-Event")!="pull_request" { jsonResponse(w,202,map[string]string{"status":"ignored"}); return }
   ev,err:=github.ParsePullRequest(body); if err!=nil { apiError(w,400,"invalid_payload",err.Error()); return }
+	 if !repositoryAllowed(ev.Repository.FullName, os.Getenv("GITHUB_ALLOWED_REPOSITORIES")) { apiError(w,403,"repository_not_allowed","repository is not authorized for this PreviewDock instance"); return }
   if ev.Action!="opened" && ev.Action!="synchronize" && ev.Action!="reopened" && ev.Action!="closed" { jsonResponse(w,202,map[string]string{"status":"ignored"}); return }
   if ev.Action=="closed" { jsonResponse(w,202,map[string]string{"status":"cleanup_queued"}); return }
   if ev.Fork { jsonResponse(w,202,map[string]string{"status":"approval_required"}); return }
@@ -52,3 +54,4 @@ func env(k,d string)string{if v:=os.Getenv(k);v!=""{return v};return d}
 func jsonResponse(w http.ResponseWriter,status int,v any){w.Header().Set("Content-Type","application/json");w.WriteHeader(status);_ = json.NewEncoder(w).Encode(v)}
 func apiError(w http.ResponseWriter,status int,code,msg string){jsonResponse(w,status,map[string]any{"error":map[string]string{"code":code,"message":msg}})}
 func requestID(next http.Handler)http.Handler{return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){id:=r.Header.Get("X-Request-ID");if id==""{sum:=sha256.Sum256([]byte(time.Now().String()));id=hex.EncodeToString(sum[:])[:16]};w.Header().Set("X-Request-ID",id);next.ServeHTTP(w,r)})}
+func repositoryAllowed(name, configured string) bool { configured=strings.TrimSpace(configured); if configured=="" { return true }; for _,candidate:=range strings.Split(configured,",") { if strings.EqualFold(strings.TrimSpace(candidate),name) { return true } }; return false }
